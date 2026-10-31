@@ -1,0 +1,31 @@
+/* 本文と見出しのフォント（日本語の TeX 論文の標準、jsarticle に合わせる）。
+   欧文：Computer Modern（CMU フォント、OFL、computer-modern パッケージのファイルを改変せずに読み込み、ビルド後に使う文字だけに絞る）。
+   和文：OS 標準の明朝体（本文）とゴシック体（見出し・太字）。 */
+@font-face {
+  font-family: "CMU Serif";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("../../node_modules/computer-modern/fonts/cmu-serif-500-roman.woff2") format("woff2");
+}
+@font-face {
+  font-family: "CMU Serif";
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+  src: url("../../node_modules/computer-modern/fonts/cmu-serif-500-italic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "CMU Serif";
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url("../../node_modules/computer-modern/fonts/cmu-serif-700-roman.woff2") format("woff2");
+}
+@font-face {
+  font-family: "CMU Sans Serif";
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url("../../node_modules/computer-modern/fonts/cmu-sans-serif-700-roman.woff2") format("woff2");
+}

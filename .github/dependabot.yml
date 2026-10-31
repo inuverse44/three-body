@@ -1,0 +1,22 @@
+# DD-16（NFR-13）：依存パッケージと Action の更新を受け取る
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      dev-dependencies:
+        dependency-type: development
+    ignore:
+      # @astrojs/check の peerDependencies が typescript ^5 || ^6 のため。対応したら外す。
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly

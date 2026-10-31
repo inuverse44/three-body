@@ -1,0 +1,327 @@
+---
+// 三体問題シミュレーター（docs/plan.md）。論文のような 1 ページの構成にする
+import "../styles/paper.css";
+import "../styles/math-font.css";
+import "../styles/tex-font.css";
+import { tex } from "../lib/tex";
+// 最初の画面で使う欧文フォント（本文と見出し）を早めに読み込む（ビルド後にサブセット化されたファイルが同じ URL で配信される）
+import cmuSerifUrl from "../../node_modules/computer-modern/fonts/cmu-serif-500-roman.woff2?url";
+import cmuSansBoldUrl from "../../node_modules/computer-modern/fonts/cmu-sans-serif-700-roman.woff2?url";
+const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+const title = "三体問題シミュレーター";
+const description = "天体が重力で引き合う三体問題（N 体問題）を、Rust で数値計算し、WebAssembly でブラウザ上に 3 次元で描きます。天体の数・初期値・積分法・刻み幅を選べ、全エネルギーの誤差やカオスも確かめられます。";
+---
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href="https://inuverse44.github.io/three-body/" />
+    <link rel="preload" href={cmuSerifUrl} as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href={cmuSansBoldUrl} as="font" type="font/woff2" crossorigin />
+    <link rel="icon" href={`${base}/favicon.svg`} type="image/svg+xml" />
+  </head>
+  <body>
+    <a class="skip" href="#main">本文へ移動</a>
+    <header>
+      <h1>{title}</h1>
+      <p class="byline">Rust と WebAssembly による数値計算 ／ Inuverse</p>
+    </header>
+    <main id="main">
+      <p class="abstract">
+        <strong>概要</strong>　天体が互いに重力で引き合う「三体問題」は、一般には式で解けず、数値計算で追うしかありません。
+        このページでは、運動方程式を Rust で数値的に解き、WebAssembly にしてブラウザ上で 3 次元に描いています。
+        天体の数（2〜8）、初期値（質量・位置・速度）、積分法、刻み幅を選んで計算し、全エネルギーの誤差や、初期値のわずかな違いが大きく育つカオスを、
+        実際に計算しながら確かめられます。8 の字を描く周期解やピタゴラスの三体問題のほか、研究で見つかった周期解、ラグランジュ点、連星を回る惑星、連星への侵入などもプリセットとして選べます。
+      </p>
+
+      <section aria-labelledby="sim-heading" data-simulator data-wasm-url={`${base}/sim.wasm`}>
+        <h2 id="sim-heading">1. シミュレーター</h2>
+        <p>
+          天体の数（2〜8）と、各天体の質量・位置・速度を決めて計算します。運動は 3 次元です。
+          有名な解はプリセットから選べ、そこから値を書き換えても構いません。
+          <span data-range>計算できるのは、質量 10⁻¹²〜10¹²、位置と速度の各成分 −10⁶〜10⁶、2 天体の間隔 10⁻⁹ 以上の値です（和や積があふれない範囲）。</span>
+        </p>
+        <div class="controls">
+          <label>プリセット
+            <select id="preset">
+              <optgroup label="有名な解">
+                <option value="0">8 の字の解</option>
+                <option value="1">ピタゴラスの三体問題</option>
+                <option value="2">8 の字の解＋垂直の速度（3 次元）</option>
+                <option value="3">傾いた連星＋第 3 天体（3 次元）</option>
+              </optgroup>
+              <optgroup label="研究済みの周期解（Šuvakov & Dmitrašinović 2013）">
+                <option value="4">蝶 I</option>
+                <option value="5">蛾 I</option>
+                <option value="6">陰陽 I</option>
+                <option value="7">トンボ</option>
+              </optgroup>
+              <optgroup label="ラグランジュ点とオイラーの解">
+                <option value="8">ラグランジュの正三角形の解（等質量）</option>
+                <option value="9" data-rotating>太陽・木星・トロヤ群（L4）</option>
+                <option value="18" data-rotating data-speed="10" data-trail="Infinity">トロヤ群のオタマジャクシ軌道</option>
+                <option value="19" data-rotating data-speed="10" data-trail="Infinity">トロヤ群の馬蹄形軌道</option>
+                <option value="10" data-rotating data-speed="10" data-trail="Infinity">重い伴星と L4（不安定）</option>
+                <option value="11">オイラーの一直線の解</option>
+              </optgroup>
+              <optgroup label="惑星">
+                <option value="12">Kepler-16（連星を回る惑星）</option>
+                <option value="13">Kepler-16 の惑星を内側に置く</option>
+                <option value="14">古在・リドフ振動（3 次元）</option>
+              </optgroup>
+              <optgroup label="連星への侵入">
+                <option value="15">入れ替わり</option>
+                <option value="16">ばらばら</option>
+              </optgroup>
+              <optgroup label="3 次元">
+                <option value="17">シトニコフ問題</option>
+              </optgroup>
+              <option value="-1">自分で入力</option>
+            </select>
+          </label>
+          <label>積分法
+            <select id="method">
+              <option value="1">RK45（刻み幅を自動で変える）</option>
+              <option value="0">RK4（刻み幅一定）</option>
+              <option value="2">リープフロッグ法（刻み幅一定）</option>
+            </select>
+          </label>
+          <label data-field="dt">刻み幅 h
+            <input id="dt" type="number" inputmode="decimal" min="0" step="any" value="0.01" />
+          </label>
+          <label data-field="tolerance">許容誤差（RK45）
+            <input id="tolerance" type="number" inputmode="decimal" min="0" step="any" value="1e-10" />
+          </label>
+          <label>軌跡の長さ
+            <select id="trail">
+              <option value="0">0（点だけ）</option>
+              <option value="0.5">0.5 単位時間</option>
+              <option value="1">1 単位時間</option>
+              <option value="2" selected>2 単位時間</option>
+              <option value="5">5 単位時間</option>
+              <option value="10">10 単位時間</option>
+              <option value="20">20 単位時間</option>
+              <option value="Infinity">∞（すべて残す）</option>
+            </select>
+          </label>
+          <label>再生の速さ
+            <select id="speed">
+              <option value="0.5">0.5 単位時間 / 秒</option>
+              <option value="1" selected>1 単位時間 / 秒</option>
+              <option value="3">3 単位時間 / 秒</option>
+              <option value="10">10 単位時間 / 秒</option>
+            </select>
+          </label>
+        </div>
+        <div class="table-scroll" data-initial>
+          <table class="initial">
+            <caption class="note">初期値（重力定数 G = 1 の無次元の単位）</caption>
+            <thead><tr><th scope="col">天体</th><th scope="col">質量 m</th><th scope="col">x</th><th scope="col">y</th><th scope="col">z</th><th scope="col">v<sub>x</sub></th><th scope="col">v<sub>y</sub></th><th scope="col">v<sub>z</sub></th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div class="controls">
+          <button id="add-body" type="button">天体を足す</button>
+          <button id="remove-body" type="button">天体を減らす</button>
+        </div>
+        <fieldset>
+          <legend>カオス（初期値の小さな違いが育つ様子）</legend>
+          <label class="check"><input id="chaos" type="checkbox" /> 初期値を少しずらした計算を、破線で重ねる</label>
+          <div class="controls" data-chaos-fields hidden>
+            <label>ずらす天体<select id="chaos-body"></select></label>
+            <label>Δx<input id="chaos-dx" type="number" step="any" value="1e-6" /></label>
+            <label>Δy<input id="chaos-dy" type="number" step="any" value="0" /></label>
+            <label>Δz<input id="chaos-dz" type="number" step="any" value="0" /></label>
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend>座標系</legend>
+          <label class="check"><input id="rotating" type="checkbox" /> 回転座標系で描く（主星と伴星を結ぶ線を止める）</label>
+          <div class="controls" data-rotating-fields hidden>
+            <label>主星<select id="primary"></select></label>
+            <label>伴星<select id="secondary"></select></label>
+          </div>
+        </fieldset>
+        <div class="controls">
+          <button id="apply" type="button" disabled>この初期値で始める</button>
+          <button id="play" type="button" aria-pressed="false" disabled>再生</button>
+        </div>
+        <p data-message role="status"></p>
+        <figure>
+          <canvas id="orbits" width="960" height="840" tabindex="0" role="img" aria-label="天体の軌道の 4 面図。左上が立体図（ドラッグか矢印キーで回転）、右上が xy 平面、左下が xz 平面、右下が yz 平面への投影。天体は色と番号で区別する"></canvas>
+          <div class="controls">
+            <button id="zoom-in" type="button">拡大</button>
+            <button id="zoom-out" type="button">縮小</button>
+            <button id="view-reset" type="button">視点を戻す</button>
+          </div>
+          <figcaption>
+            図 1　天体の軌道の 4 面図。左上：立体図（ドラッグか、図を選んで矢印キーで回転）、右上：xy 平面、左下：xz 平面、右下：yz 平面への投影。
+            原点は重心で、天体が離れると表示の範囲を広げる。天体の色と番号は、初期値の表の天体に対応する。円の大きさは質量に応じる。
+            軌跡は「軌跡の長さ」で選んだ時間だけ残し、古い部分ほど薄く描く（「すべて残す」では、天体 1 つあたり最新の 20,000 点まで）。
+            回転座標系では、原点を主星と伴星の重心に、x′ 軸を主星から伴星への向きに、z′ 軸を 2 天体の公転の軸の向きにとり、ラグランジュ点 L1〜L5 に＋の印をつける（立体図と x′y′ 面だけ）。
+            座標系を切り替えても軌跡は消えない。主星か伴星を選び直すと、軌跡はそこから描き直す。
+            <ul class="legend">
+              <li data-chaos-legend hidden><span class="swatch dashed sm"></span>破線：初期値をずらした計算</li>
+            </ul>
+          </figcaption>
+        </figure>
+        <dl class="readout">
+          <div><dt>時刻 t</dt><dd data-out="time">—</dd></div>
+          <div><dt>計算の回数</dt><dd data-out="steps">—</dd></div>
+          <div><dt>いまの刻み幅 h</dt><dd data-out="dt">—</dd></div>
+          <div><dt>全エネルギーの相対誤差</dt><dd data-out="energy">—</dd></div>
+          <div><dt>全角運動量のずれ |ΔL|</dt><dd data-out="angular">—</dd></div>
+          <div><dt>2 つの計算の位置のずれ</dt><dd data-out="separation">—</dd></div>
+        </dl>
+        <p class="note" data-error hidden>WebAssembly を読み込めませんでした。お使いのブラウザでは動かない可能性があります。</p>
+      </section>
+
+      <section aria-labelledby="energy-heading">
+        <h2 id="energy-heading">2. 全エネルギーの相対誤差</h2>
+        <p>
+          いま計算している運動について、本来は変わらないはずの全エネルギーが、計算の誤差でどれだけずれたかを示します（定義は 3 章）。
+          「3 つの積分法で比べる」を押すと、同じ初期値・同じ刻み幅で 3 つの方法を計算し、重ねて描きます。
+        </p>
+        <div class="controls">
+          <label>比べる時間<input id="compare-until" type="number" min="0" step="any" value="20" /></label>
+          <button id="compare" type="button" disabled>3 つの積分法で比べる</button>
+        </div>
+        <figure>
+          <canvas id="energy" width="960" height="460" role="img" aria-label="時刻ごとの全エネルギーの相対誤差のグラフ。横軸は時刻、縦軸は相対誤差（対数）。比べたときの数値は下の表にもある"></canvas>
+          <figcaption>
+            図 2　横軸：時刻 t（Time），縦軸：全エネルギーの相対誤差 |ΔE / E₀|（Relative energy error、対数の目盛り）。
+            <ul class="legend" data-energy-legend></ul>
+          </figcaption>
+        </figure>
+        <table>
+          <thead><tr><th scope="col">積分法</th><th scope="col">最後の相対誤差</th><th scope="col">最大の相対誤差</th><th scope="col">計算の回数</th></tr></thead>
+          <tbody data-compare-table><tr><td colspan="4" class="note">「3 つの積分法で比べる」を押すと、結果がここに表示されます。</td></tr></tbody>
+        </table>
+      </section>
+
+      <section aria-labelledby="method-heading">
+        <h2 id="method-heading">3. 方法</h2>
+        <h3>運動方程式</h3>
+        <p>天体 i の位置を <Fragment set:html={tex(String.raw`\mathbf r_i`)} />、質量を <Fragment set:html={tex("m_i")} /> とすると、運動方程式は</p>
+        <Fragment set:html={tex(String.raw`\ddot{\mathbf r}_i = \sum_{j \neq i} G m_j \, \frac{\mathbf r_j - \mathbf r_i}{\lVert \mathbf r_j - \mathbf r_i \rVert^{3}}, \qquad \mathbf r_i \in \mathbb R^{3},\ i = 1, \dots, N`, true)} />
+        <p>です。天体の数 N は 2〜8 で、G = 1 とします。天体が近づいたときに力を弱める工夫（軟化）は入れていません。</p>
+        <h3>保存量と誤差の定義</h3>
+        <p>全エネルギーと全角運動量（ベクトル）は、厳密には時間によらず一定です。</p>
+        <Fragment set:html={tex(String.raw`E = \sum_{i} \frac{1}{2} m_i \lVert \dot{\mathbf r}_i \rVert^{2} - \sum_{i < j} \frac{G m_i m_j}{\lVert \mathbf r_j - \mathbf r_i \rVert}, \qquad \mathbf L = \sum_i m_i \, \mathbf r_i \times \dot{\mathbf r}_i`, true)} />
+        <p>図 2 の縦軸は、全エネルギーの相対誤差</p>
+        <Fragment set:html={tex(String.raw`\varepsilon_E(t) = \left| \frac{E(t) - E(0)}{E(0)} \right|`, true)} />
+        <p>です。</p>
+        <h3>積分法</h3>
+        <p>状態を <Fragment set:html={tex(String.raw`y = (\mathbf r_1, \dots, \mathbf r_N, \dot{\mathbf r}_1, \dots, \dot{\mathbf r}_N)`)} />、運動方程式を <Fragment set:html={tex(String.raw`\dot y = f(y)`)} />、刻み幅を <Fragment set:html={tex("h")} /> とします。</p>
+        <p><strong>古典的ルンゲ・クッタ法（RK4、4 次）</strong></p>
+        <Fragment set:html={tex(String.raw`\begin{aligned} k_1 &= f(y_n), \\ k_2 &= f\!\left(y_n + \tfrac{h}{2} k_1\right), \\ k_3 &= f\!\left(y_n + \tfrac{h}{2} k_2\right), \\ k_4 &= f(y_n + h\, k_3), \\ y_{n+1} &= y_n + \tfrac{h}{6}\left(k_1 + 2k_2 + 2k_3 + k_4\right) \end{aligned}`, true)} />
+        <p><strong>ドルマン・プリンス法（RK45、5(4) 次）</strong>　7 段の計算から 5 次と 4 次の解 <Fragment set:html={tex(String.raw`y^{(5)}_{n+1}, y^{(4)}_{n+1}`)} /> を作り、その差で誤差を見積もって刻み幅を決めます。</p>
+        <Fragment set:html={tex(String.raw`\mathrm{err} = \sqrt{\frac{1}{N} \sum_{k} \left( \frac{y^{(5)}_{k} - y^{(4)}_{k}}{\tau \left(1 + \max(|y_{n,k}|, |y^{(5)}_{k}|)\right)} \right)^{2}}, \qquad h_{\text{new}} = h \cdot \min\!\left(5, \max\!\left(0.2,\ 0.9\,\mathrm{err}^{-1/5}\right)\right)`, true)} />
+        <p><Fragment set:html={tex(String.raw`\tau`)} /> は許容誤差です。<Fragment set:html={tex(String.raw`\mathrm{err} \le 1`)} /> なら進み、そうでなければ <Fragment set:html={tex("h")} /> を縮めてやり直します。</p>
+        <p><strong>リープフロッグ法（速度ベルレ法、2 次、シンプレクティック）</strong>　加速度を <Fragment set:html={tex(String.raw`\mathbf a(\mathbf r)`)} /> として、</p>
+        <Fragment set:html={tex(String.raw`\mathbf v_{n+1/2} = \mathbf v_n + \tfrac{h}{2} \mathbf a(\mathbf r_n), \qquad \mathbf r_{n+1} = \mathbf r_n + h\, \mathbf v_{n+1/2}, \qquad \mathbf v_{n+1} = \mathbf v_{n+1/2} + \tfrac{h}{2} \mathbf a(\mathbf r_{n+1})`, true)} />
+        <p>全角運動量を厳密に保ち、全エネルギーの誤差は長時間でも増え続けません。</p>
+        <h3>回転座標系</h3>
+        <p>主星と伴星を選ぶと、2 天体の重心を原点とし、主星から伴星への向きを x′ 軸、2 天体の相対運動の角運動量の向きを z′ 軸とする座標系で描ける。
+          2 天体が円軌道を回るとき、この座標系では 2 天体が止まって見え、ほかの天体が止まっていられる点がラグランジュ点 L1〜L5 になる。
+          L1〜L3 は 2 天体を結ぶ直線の上で、重力と遠心力がつり合う点として数値的に求め、L4・L5 は 2 天体と正三角形をなす点。
+          印の位置は、いまの 2 天体の間隔から決める（2 天体の軌道が円でないときは、目安になる）。</p>
+        <h3>プリセット</h3>
+        <ul>
+          <li><strong>8 の字の解</strong>：同じ質量の 3 天体が、1 本の 8 の字の上を追いかけ合う周期解（周期 約 6.326）。初期値は広く使われている数値を用いた。</li>
+          <li><strong>ピタゴラスの三体問題</strong>：質量 3・4・5 の天体を、辺の長さ 3・4・5 の直角三角形の頂点に静止させて始める。時刻 70 ごろ、最も軽い天体が弾き飛ばされ、残りの 2 つが連星になる。</li>
+          <li><strong>8 の字の解＋垂直の速度</strong>：8 の字の解の天体 1 に、平面に垂直な速度 v<sub>z</sub> = 0.1 を足したもの（全運動量が 0 になるよう、ほかの 2 天体に逆向きに分ける）。8 の字が少しずつ傾きを変えながら回る、3 次元の動きになる。</li>
+          <li><strong>傾いた連星＋第 3 天体</strong>：質量 1・1 の連星（間隔 1、xy 平面の円軌道）の周りを、質量 0.1 の天体が半径 5 の円軌道で、xy 平面から 30° 傾いて回る（階層的な三体）。</li>
+        </ul>
+        <p><strong>研究済みの周期解</strong>　Šuvakov と Dmitrašinović（2013）が数値的に見つけた、等質量・全角運動量 0 の周期解。初期値は
+          <Fragment set:html={tex(String.raw`\mathbf r_1 = -\mathbf r_2 = (-1, 0)`)} />、<Fragment set:html={tex(String.raw`\mathbf r_3 = 0`)} />、<Fragment set:html={tex(String.raw`\mathbf v_1 = \mathbf v_2 = (p_1, p_2)`)} />、<Fragment set:html={tex(String.raw`\mathbf v_3 = -2\mathbf v_1`)} />
+          の形で、<Fragment set:html={tex("(p_1, p_2)")} /> と周期 T は文献の表の値（蝶 I・陰陽 I・トンボは Li と Liao による 15 桁、蛾 I は元の表の 5 桁）。
+          どれも不安定で、初期値のわずかな誤差が育ち、やがて周期から外れる（蝶 I は t ≈ 130）。</p>
+        <ul>
+          <li><strong>蝶 I</strong>（T ≈ 6.236）、<strong>蛾 I</strong>（T ≈ 14.89）、<strong>陰陽 I</strong>（T ≈ 17.33）、<strong>トンボ</strong>（T ≈ 21.27）。</li>
+        </ul>
+        <p><strong>ラグランジュ点とオイラーの解</strong>　3 天体が形を変えずに回る解。正三角形に並ぶもの（ラグランジュ）と、一直線に並ぶもの（オイラー）がある。
+          正三角形の解が安定なのは、質量が <Fragment set:html={tex(String.raw`27(m_1 m_2 + m_2 m_3 + m_3 m_1) < (m_1 + m_2 + m_3)^2`)} /> を満たすときだけ（Routh）。
+          1 つの質量が無視できるときは、伴星の質量の割合 μ が約 0.0385 未満のとき。</p>
+        <ul>
+          <li><strong>ラグランジュの正三角形の解（等質量）</strong>：質量 1 の 3 天体が辺 1 の正三角形のまま回る。等質量は上の条件を満たさないので、計算の丸め誤差だけで t ≈ 20 で崩れる。</li>
+          <li><strong>太陽・木星・トロヤ群（L4）</strong>：主星と伴星（質量の割合 μ = 9.537 × 10⁻⁴。伴星と主星の質量の比が、木星と太陽の比 9.546 × 10⁻⁴ になる）が間隔 1 の円軌道を回り、両者と正三角形をなす点 L4 に、ごく軽い天体（質量 10⁻⁹）を置く。μ が小さいので L4 にとどまる。回転座標系で始めるので、L4 の天体は L4 の印の上に止まって見える（座標系を切り替えると、伴星の 60° 前を同じ円の上で回って見える）。</li>
+          <li><strong>トロヤ群のオタマジャクシ軌道</strong>：上の L4 の天体を、主星と伴星の重心の周りに 20° 前へ回した位置に、2 天体と同じ角速度で置く。回転座標系での角度（2 天体の重心から見て、伴星の向きから公転の向きに測る。L4 は約 60°）が 44°〜80° のあいだを周期 約 80 で揺れ、軌跡は L4 を囲むオタマジャクシの形になる。</li>
+          <li><strong>トロヤ群の馬蹄形軌道</strong>：同じく 115° 回した位置（L3 の近く）から始める。角度が約 20°〜340° を往復し、L4・L3・L5 をまたぐ馬蹄形を描く。伴星に近づくたびに押し返され、伴星の位置（0°）は越えない。</li>
+          <li><strong>重い伴星と L4（不安定）</strong>：L4 の配置で μ = 0.05 にしたもの。条件を超えるので、L4 の天体は L4 の印から離れていく。</li>
+          <li><strong>オイラーの一直線の解</strong>：質量 1 の 3 天体が間隔 1 で一直線に並んで回る。不安定で、中央の天体を 10⁻⁹ ずらしただけで t ≈ 10 で崩れる。</li>
+        </ul>
+        <p><strong>惑星</strong></p>
+        <ul>
+          <li><strong>Kepler-16（連星を回る惑星）</strong>：2 つの星（太陽の 0.6897 倍と 0.20255 倍、軌道長半径 0.22431 AU、離心率 0.15944）の周りを、木星の 0.333 倍の惑星が 0.7048 AU で回る（Doyle ほか 2011 の値）。単位は太陽質量と AU で、時間の 1 は約 58 日。軌道は同じ平面に簡略化し、星は近点から、惑星は円軌道から始める。</li>
+          <li><strong>Kepler-16 の惑星を内側に置く</strong>：惑星を 0.5 AU に置いたもの。連星を回る惑星が安定にいられる最小の距離は、Holman と Wiegert（1999）の式で約 0.65 AU。その内側なので、惑星は連星にかき乱されて飛ばされる。</li>
+          <li><strong>古在・リドフ振動（3 次元）</strong>：質量 1 の星の周りを質量 0.001 の惑星が半径 1・離心率 0.05 で回り、質量 1 の星が半径 5 の円軌道で、惑星の軌道面から 75° 傾いて回る。傾きが約 39.2° を超えると、惑星の軌道の離心率と傾きが入れ替わるように変わり、離心率は 0.9 を超えるまで大きくなる（t ≈ 320。再生速度を上げると見やすい）。</li>
+        </ul>
+        <p><strong>連星への侵入</strong>　質量 1・1 の連星（間隔 1、円軌道）に、質量 1 の天体が距離 15 から飛び込む。点の質量どうしでは、結末は素通り・入れ替わり・ばらばらのどれかになる（Hut と Bahcall 1983）。
+          全エネルギーが 0 になる飛び込みの速さ（無限遠での速さ）を臨界速度 <Fragment set:html={tex("v_c")} /> とする（等質量では <Fragment set:html={tex(String.raw`v_c^2 = 3/2`)} />）。</p>
+        <ul>
+          <li><strong>入れ替わり</strong>：<Fragment set:html={tex(String.raw`0.6\,v_c`)} /> で飛び込む。しばらく 3 天体がもつれ合ったあと（t ≈ 30）、飛び込んだ天体 3 が天体 1 と連星を作り、天体 2 が弾き出される。</li>
+          <li><strong>ばらばら</strong>：<Fragment set:html={tex(String.raw`2\,v_c`)} /> で正面から飛び込む。全エネルギーが正なので、3 天体とも離れていく。</li>
+        </ul>
+        <p><strong>シトニコフ問題（3 次元）</strong>　質量 0.5・0.5 の連星（軌道長半径 1、離心率 0.1）の重心を通り、軌道面に垂直な軸の上に、ごく軽い天体（質量 10⁻⁹）を z = 1 で静止させて置く。軽い天体は軸の上を、軌道面を通り抜けながら上下に振動し続ける。</p>
+      </section>
+
+      <section aria-labelledby="verify-heading">
+        <h2 id="verify-heading">4. 検証</h2>
+        <p>計算が正しいことを、次のテストで確かめています。テストは変更のたびに自動で実行されます（テストのコード：<a href="https://github.com/inuverse44/three-body/blob/main/crates/sim/tests/verification.rs">基本の検証</a>、<a href="https://github.com/inuverse44/three-body/blob/main/crates/sim/tests/presets.rs">追加したプリセットの検証</a>）。</p>
+        <table>
+          <thead><tr><th scope="col">確かめること</th><th scope="col">基準</th></tr></thead>
+          <tbody>
+            <tr><td>二体の円軌道が、1 周期後に元の位置に戻る</td><td>解析解との差が十分に小さい</td></tr>
+            <tr><td>8 の字の解が、1 周期後に初期状態に戻る</td><td>位置の差が 10⁻⁶ 未満</td></tr>
+            <tr><td>全運動量が保たれる。リープフロッグ法では全角運動量も保たれる</td><td>ずれが 10⁻⁹（角運動量は 10⁻¹⁰）未満</td></tr>
+            <tr><td>リープフロッグ法のエネルギーの誤差が、100 周期でも増え続けない</td><td>10 周期の最大値と同程度</td></tr>
+            <tr><td>ピタゴラスの三体問題で、最も軽い天体が弾き飛ばされ、残りが連星になる</td><td>Szebehely と Peters（1967）の結果と一致</td></tr>
+            <tr><td>8 の字の解を空間の中で傾けても、1 周期後に初期状態に戻る（3 次元の計算が向きに依らない）</td><td>位置の差が 10⁻⁶ 未満</td></tr>
+            <tr><td>5 体の 3 次元の運動で、全運動量と全角運動量（ベクトル）が保たれる（リープフロッグ法）</td><td>ずれが 10⁻⁹（角運動量は 10⁻¹⁰）未満</td></tr>
+            <tr data-range><td>入力の検証：天体は 2〜8 個、質量は 10⁻¹²〜10¹²、位置と速度の各成分は −10⁶〜10⁶、2 天体の間隔は 10⁻⁹ 以上</td><td>誤った入力を受け付けない</td></tr>
+            <tr><td>研究済みの周期解（蝶 I・蛾 I・陰陽 I・トンボ）が、1 周期後に初期状態に戻る。蝶 I は 40 周期までに周期から外れる</td><td>1 周期後の位置の差が 5 × 10⁻³ 未満（初期値の桁数による）</td></tr>
+            <tr><td>ラグランジュの正三角形の解（等質量）とオイラーの一直線の解は、はじめは形を保ち、やがて崩れる</td><td>1 周期目は形のずれが小さく、のちに 0.1 を超える</td></tr>
+            <tr><td>L4 の天体は、μ = 9.537 × 10⁻⁴（木星）ではとどまり、μ = 0.05 では離れる</td><td>100 周期のあいだ 60° ± 1°（前者）、30° 以上ずれる（後者）</td></tr>
+            <tr><td>Kepler-16 の惑星は回り続け、0.5 AU に置いた惑星は飛ばされる</td><td>距離 0.6〜0.8 AU を保つ（前者）、時刻 200 で 10 AU より遠い（後者）</td></tr>
+            <tr><td>古在・リドフ振動で、傾き 75° では惑星の離心率が大きくなり、30° では大きくならない</td><td>離心率の最大が 0.9 を超える（75°）、0.1 未満（30°）</td></tr>
+            <tr><td>連星への侵入で、入れ替わり・ばらばらの結末になる。シトニコフ問題の軽い天体は軸の上で振動し続ける</td><td>時刻 300 の束縛の状態、時刻 1000 までの位置</td></tr>
+            <tr><td>上のプリセットは、画面と同じく初期値を有効数字 10 桁に丸めても、同じ結果になる</td><td>上の基準を丸めた初期値でも満たす</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section aria-labelledby="refs-heading">
+        <h2 id="refs-heading">参考文献</h2>
+        <ol class="refs">
+          <li>Chenciner, A., &amp; Montgomery, R. (2000). A remarkable periodic solution of the three-body problem in the case of equal masses. <i>Annals of Mathematics</i>, 152(3), 881–901. doi:10.2307/2661357</li>
+          <li>Burrau, C. (1913). Numerische Berechnung eines Spezialfalles des Dreikörperproblems. <i>Astronomische Nachrichten</i>, 195(6), 113–118. doi:10.1002/asna.19131950602</li>
+          <li>Szebehely, V., &amp; Peters, C. F. (1967). Complete solution of a general problem of three bodies. <i>The Astronomical Journal</i>, 72, 876. doi:10.1086/110355</li>
+          <li>Dormand, J. R., &amp; Prince, P. J. (1980). A family of embedded Runge–Kutta formulae. <i>Journal of Computational and Applied Mathematics</i>, 6(1), 19–26. doi:10.1016/0771-050X(80)90013-3</li>
+          <li>Šuvakov, M., &amp; Dmitrašinović, V. (2013). Three classes of Newtonian three-body planar periodic orbits. <i>Physical Review Letters</i>, 110(11), 114301. doi:10.1103/PhysRevLett.110.114301</li>
+          <li>Li, X., &amp; Liao, S. (2013). A commend on “Three Classes of Newtonian Three-Body Planar Periodic Orbits”. arXiv:1312.6796</li>
+          <li>Routh, E. J. (1874). On Laplace's three particles, with a supplement on the stability of steady motion. <i>Proceedings of the London Mathematical Society</i>, s1-6(1), 86–97. doi:10.1112/plms/s1-6.1.86</li>
+          <li>Doyle, L. R., et al. (2011). Kepler-16: A transiting circumbinary planet. <i>Science</i>, 333(6049), 1602–1606. doi:10.1126/science.1210923</li>
+          <li>Holman, M. J., &amp; Wiegert, P. A. (1999). Long-term stability of planets in binary systems. <i>The Astronomical Journal</i>, 117(1), 621–628. doi:10.1086/300695</li>
+          <li>Kozai, Y. (1962). Secular perturbations of asteroids with high inclination and eccentricity. <i>The Astronomical Journal</i>, 67, 591. doi:10.1086/108790</li>
+          <li>Lidov, M. L. (1962). The evolution of orbits of artificial satellites of planets under the action of gravitational perturbations of external bodies. <i>Planetary and Space Science</i>, 9(10), 719–759. doi:10.1016/0032-0633(62)90129-0</li>
+          <li>Hut, P., &amp; Bahcall, J. N. (1983). Binary-single star scattering. I. Numerical experiments for equal masses. <i>The Astrophysical Journal</i>, 268, 319. doi:10.1086/160956</li>
+          <li>Hairer, E., Lubich, C., &amp; Wanner, G. (2006). <i>Geometric Numerical Integration: Structure-Preserving Algorithms for Ordinary Differential Equations</i> (2nd ed., Springer Series in Computational Mathematics, Vol. 31). Springer. doi:10.1007/3-540-30666-8</li>
+        </ol>
+      </section>
+    </main>
+    <footer>
+      <p>
+        <img src={`${base}/avatar-64.webp`} alt="" width="24" height="24" />
+        制作：<a href="https://www.inuverse.dev">Inuverse</a> ／
+        <a href="https://github.com/inuverse44/three-body">ソースコード</a>（MIT License）
+      </p>
+    </footer>
+    <script>
+      import "../scripts/simulator.ts";
+    </script>
+  </body>
+</html>

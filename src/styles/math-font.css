@@ -1,0 +1,12 @@
+/* 数式のフォント：STIX Two Math（OFL、@fontsource/stix-two-math のファイルを改変せずに使う）。
+   fontsource の CSS は対象の文字を Latin に限っているので、数学記号にも使えるよう、範囲を限らずに読み込む。 */
+@font-face {
+  font-family: "STIX Two Math";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("../../node_modules/@fontsource/stix-two-math/files/stix-two-math-latin-400-normal.woff2") format("woff2");
+}
+math {
+  font-family: "STIX Two Math", math;
+}

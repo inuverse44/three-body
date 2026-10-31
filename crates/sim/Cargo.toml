@@ -1,0 +1,10 @@
+[package]
+name = "sim"
+version = "0.1.0"
+edition = "2024"
+description = "三体問題の数値計算（外部クレートなし）"
+license = "MIT"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]

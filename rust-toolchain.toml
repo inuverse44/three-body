@@ -1,0 +1,5 @@
+# 手元と CI で同じ Rust を使う（WebAssembly 用のビルド先も含める）
+[toolchain]
+channel = "1.99.0"
+targets = ["wasm32-unknown-unknown"]
+components = ["clippy", "rustfmt"]
