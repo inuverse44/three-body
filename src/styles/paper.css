@@ -321,7 +321,17 @@ legend {
 .swatch.s8 {
   border-color: var(--series-8);
 }
-#orbits {
-  touch-action: none;
-  cursor: grab;
+/* ヘルプのページ：シミュレーターへ戻る矢印 */
+header:has(.back) {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  margin-top: 2rem;
 }

@@ -1,0 +1,470 @@
+/* メイン画面：図が主役の 2 列。無地の面と細い線だけで、説明文は置かない（docs/ui-redesign.md）。
+   CSP によりインラインの style 属性は使えないので、見た目はすべてクラスで指定する */
+:root {
+  --bg: #f4f3ef;
+  --paper: #ffffff;
+  --text: #1b1b1b;
+  --muted: #5a5852;
+  --rule: #d9d8d2;
+  --grid: #ecebe6;
+  --accent: #1f4f8f;
+  --on-accent: #ffffff;
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
+  --series-5: #e87ba4;
+  --series-6: #008300;
+  --series-7: #6250d6;
+  --series-8: #e34948;
+  --font-body: "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Yu Gothic UI", "Yu Gothic", "Noto Sans JP", system-ui, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #121211;
+    --paper: #1a1a19;
+    --text: #ecebe6;
+    --muted: #b4b2aa;
+    --rule: #3a3a37;
+    --grid: #2c2c2a;
+    --accent: #8fb7ea;
+    --on-accent: #0d1b2e;
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --series-4: #c98500;
+    --series-5: #d55181;
+    --series-6: #008300;
+    --series-7: #9085e9;
+    --series-8: #e66767;
+    color-scheme: dark;
+  }
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+.sprite {
+  position: absolute;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+[hidden] {
+  display: none !important;
+}
+:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+.skip {
+  position: absolute;
+  left: 1rem;
+  top: -3rem;
+}
+.skip:focus {
+  top: 0.5rem;
+  z-index: 10;
+  padding: 0.25rem 0.5rem;
+  background: var(--paper);
+}
+
+/* 上の帯 */
+.bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  max-width: 78rem;
+  margin-inline: auto;
+  padding: 0.5rem 1rem;
+}
+h1 {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+/* 2 列：図（左）と操作盤（右）。狭い画面では 1 列で、図を先頭に置く */
+main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+  max-width: 78rem;
+  margin-inline: auto;
+  padding: 0 1rem 2rem;
+}
+@media (min-width: 62rem) {
+  main {
+    grid-template-columns: minmax(0, 1fr) 21rem;
+    align-items: start;
+  }
+  .panel {
+    position: sticky;
+    top: 1rem;
+  }
+}
+.stage {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+}
+/* 狭い画面では、図のすぐ下に操作盤（プリセットと設定）を置き、初期値とエネルギーの図はその後ろに回す */
+@media (max-width: 61.99rem) {
+  .stage {
+    display: contents;
+  }
+  .panel {
+    order: 1;
+  }
+  .stage > .block {
+    order: 2;
+  }
+}
+.view {
+  margin: 0;
+}
+canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: var(--paper);
+}
+/* 図と操作バーが 1 画面に収まるように、高さを画面に合わせて抑える（縦横比は保つ） */
+#orbits {
+  width: auto;
+  max-width: 100%;
+  max-height: calc(100svh - 9rem);
+  margin-inline: auto;
+  touch-action: none;
+  cursor: grab;
+}
+
+/* アイコンボタン（的は 44px 以上） */
+.icon-btn,
+.text-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: var(--paper);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.text-btn {
+  padding-inline: 0.9rem;
+}
+.icon-btn:hover:not(:disabled),
+.text-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+.icon-btn:disabled,
+.text-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.icon-btn svg,
+.text-btn svg,
+.icon-field svg {
+  width: 1.4rem;
+  height: 1.4rem;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.primary:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+.primary svg {
+  fill: currentColor;
+}
+.primary .i-pause {
+  fill: none;
+}
+#play .i-pause,
+#play[aria-pressed="true"] .i-play {
+  display: none;
+}
+#play[aria-pressed="true"] .i-pause {
+  display: block;
+}
+.transport {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+.gap {
+  flex: 1;
+}
+
+/* 状態の通知（誤りの理由など。空のときは場所を取らない） */
+[data-message] {
+  margin: 0;
+}
+[data-message]:empty {
+  display: none;
+}
+[data-message],
+.error {
+  padding: 0.5rem 0.75rem;
+  border-left: 4px solid var(--series-2);
+  background: var(--paper);
+}
+
+/* 図の下のまとまり */
+.block {
+  padding: 0.75rem;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: var(--paper);
+}
+.block canvas {
+  border: 0;
+  border-radius: 0;
+}
+summary {
+  min-height: 2rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+.table-scroll {
+  overflow-x: auto;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+th,
+td {
+  padding: 0.25rem;
+  border-bottom: 1px solid var(--grid);
+  text-align: left;
+}
+th[scope="col"] {
+  color: var(--muted);
+  font-weight: 400;
+}
+.initial input[type="number"] {
+  min-width: 4.75rem;
+}
+.initial tbody th {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  white-space: nowrap;
+}
+.compare:has(tbody:empty) {
+  display: none;
+}
+
+/* 天体の印：色・形・番号 */
+.mk {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+.mk.s1 { color: var(--series-1); }
+.mk.s2 { color: var(--series-2); }
+.mk.s3 { color: var(--series-3); }
+.mk.s4 { color: var(--series-4); }
+.mk.s5 { color: var(--series-5); }
+.mk.s6 { color: var(--series-6); }
+.mk.s7 { color: var(--series-7); }
+.mk.s8 { color: var(--series-8); }
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+.swatch {
+  display: inline-block;
+  width: 1.5rem;
+  height: 0;
+  margin-inline: 0.4rem;
+  border-top: 3px solid;
+  vertical-align: middle;
+}
+.swatch.dashed {
+  border-top-style: dashed;
+}
+.swatch.sm { border-color: var(--muted); }
+.swatch.s1 { border-color: var(--series-1); }
+.swatch.s2 { border-color: var(--series-2); }
+.swatch.s3 { border-color: var(--series-3); }
+
+/* 操作盤 */
+.panel {
+  min-width: 0;
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: var(--paper);
+}
+.group {
+  display: grid;
+  gap: 0.5rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--rule);
+}
+.fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+select,
+input[type="number"] {
+  width: 100%;
+  min-width: 0;
+  min-height: 2.75rem;
+  padding: 0.3rem 0.6rem;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: var(--paper);
+  color: var(--text);
+  font: inherit;
+}
+.wide {
+  font-weight: 700;
+}
+.field {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+.field > span:not(.sr-only) {
+  min-width: 1.5rem;
+  color: var(--muted);
+}
+.icon-field svg {
+  color: var(--muted);
+}
+.readout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+  margin: 0;
+}
+.readout div {
+  padding: 0.4rem 0.6rem;
+  border-radius: 8px;
+  background: var(--bg);
+}
+.readout dt {
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+.readout dd {
+  margin: 0;
+  font-size: 1.125rem;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+/* スイッチ（チェックボックスの見た目だけを変える） */
+.switch {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: 2.75rem;
+  cursor: pointer;
+}
+.switch input {
+  position: absolute;
+  z-index: 1;
+  left: 0;
+  opacity: 0;
+  cursor: pointer;
+  width: 2.75rem;
+  height: 2.75rem;
+  margin: 0;
+}
+.track {
+  position: relative;
+  flex: none;
+  width: 2.5rem;
+  height: 1.5rem;
+  border: 2px solid var(--muted);
+  border-radius: 1rem;
+  transition: background 0.15s;
+}
+.track::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 50%;
+  background: var(--muted);
+  transition: transform 0.15s, background 0.15s;
+}
+.switch input:checked + .track {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+.switch input:checked + .track::after {
+  background: var(--on-accent);
+  transform: translateX(1rem);
+}
+.switch input:focus-visible + .track {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .track,
+  .track::after {
+    transition: none;
+  }
+}
+@media (prefers-contrast: more) {
+  :root {
+    --rule: #6b6a65;
+  }
+}

@@ -136,8 +136,8 @@ test("図 2：いまの運動の誤差を描き、3 つの積分法の比較で�
   await expect(page.locator("[data-energy-legend] li")).toHaveCount(3);
 });
 
-test("V-08：数式は MathML で表示され、style 属性を持たない", async ({ page }) => {
-  await ready(page);
+test("V-08：数式は MathML で表示され、style 属性を持たない（ヘルプのページ）", async ({ page }) => {
+  await page.goto("./help/");
   expect(await page.locator("math").count()).toBeGreaterThan(10);
   expect(await page.locator("math [style], math[style]").count()).toBe(0);
 });
@@ -163,7 +163,45 @@ test.describe("V-07：アクセシビリティ（axe）と画面幅", () => {
       expect(serious.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`)).toEqual([]);
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
     });
+    test(`${scheme}（ヘルプ）`, async ({ page }) => {
+      await page.setViewportSize({ width: 360, height: 780 });
+      await page.emulateMedia({ colorScheme: scheme });
+      await page.goto("./help/");
+      const axe = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze();
+      const serious = axe.violations.filter((v) => v.impact === "critical" || v.impact === "serious");
+      expect(serious.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`)).toEqual([]);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
+    });
   }
+});
+
+test("副ラベルを付けない：メイン画面には説明の段落がなく、見出しの代わりに記号とアイコンで示す。説明はヘルプにある", async ({ page }) => {
+  await ready(page);
+  expect(await page.locator("main p:not([data-message]):not([data-error]), figcaption").count()).toBe(0);
+  await page.click('a[aria-label="使い方と解説"]');
+  await expect(page).toHaveURL(/\/help\/$/);
+  await expect(page.locator("h1")).toHaveText("使い方と解説");
+});
+
+test("色だけに頼らない：初期値の表の天体は、色・形・番号を持つ", async ({ page }) => {
+  await ready(page);
+  const rows = page.locator("[data-initial] tbody tr th");
+  await expect(rows).toHaveCount(3);
+  for (const [i, row] of (await rows.all()).entries()) {
+    await expect(row.locator("span")).toHaveText(String(i + 1));
+    await expect(row.locator("svg use")).toHaveAttribute("href", `#mk${i}`);
+  }
+});
+
+test("キーボード：Space で再生と一時停止、R でやり直し", async ({ page }) => {
+  await ready(page);
+  await page.locator("body").press("Space");
+  await expect(page.locator("#play")).toHaveAttribute("aria-pressed", "false");
+  await page.locator("body").press("Space");
+  await expect(page.locator("#play")).toHaveAttribute("aria-pressed", "true");
+  await page.locator("body").press("Space");
+  await page.locator("body").press("r");
+  await expect(page.locator('[data-out="time"]')).toHaveText("0.00");
 });
 
 test("N 体：天体を 2〜8 個に増減でき、増やした天体で計算できる", async ({ page }) => {
@@ -243,8 +281,8 @@ test("軌跡の長さ：0 から ∞ まで選べ、短くすると描かれる�
   expect(none).toBeLessThan(all / 3);
 });
 
-test("フォント：本文は Computer Modern Roman（＋明朝体）、節タイトルは Computer Modern Sans（＋ゴシック体）", async ({ page }) => {
-  await ready(page);
+test("フォント：ヘルプの本文は Computer Modern Roman（＋明朝体）、節タイトルは Computer Modern Sans（＋ゴシック体）", async ({ page }) => {
+  await page.goto("./help/");
   const family = (selector: string) => page.locator(selector).first().evaluate((el) => getComputedStyle(el).fontFamily);
   expect(await family("h2")).toMatch(/^"CMU Sans Serif"/);
   expect(await family("h2")).toContain("Gothic");
@@ -409,7 +447,10 @@ test("V-26：N-07 の範囲の端の初期値（質量 10⁻¹²・10¹²、成�
 test("V-26：N-07 の範囲の外は理由を表示して受け付けない。理由とページの文の範囲は、計算部分の値（sim_limit）と一致する", async ({ page }) => {
   await ready(page);
   const reason = page.locator("[data-message]");
-  const ranges = await page.locator("[data-range]").allTextContents();
+  const help = await page.context().newPage();
+  await help.goto("./help/");
+  const ranges = await help.locator("[data-range]").allTextContents();
+  await help.close();
   expect(ranges).toHaveLength(2);
   for (const [field, value] of [["b0-m", "1e308"], ["b1-m", "1e-13"], ["b1-m", "1000000000001"]]) {
     await page.selectOption("#preset", "0");
