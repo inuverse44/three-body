@@ -2,6 +2,7 @@
 // 天体の数（2〜8）と、各天体の質量・位置・速度（3 次元）を利用者が入力できる。有名シナリオは入力欄に値を入れるプリセット（S-05）。
 // 図 1 は、静止座標系（原点は重心）と、主星と伴星を結ぶ線が止まって見える回転座標系を切り替えて描ける。
 
+import { markerPoints } from "../lib/markers";
 import { rotatingFrame, toFrame, type Frame, type V3 } from "../lib/rotating-frame";
 import { recordTimes, TIME_LIMIT, trimTrail } from "../lib/trail";
 
@@ -127,9 +128,17 @@ function renderRows(n: number): void {
       const tr = document.createElement("tr");
       const th = document.createElement("th");
       th.scope = "row";
-      const sw = document.createElement("span");
-      sw.className = `swatch s${b + 1}`;
-      th.append(sw, `天体 ${b + 1}`);
+      // 色・形・番号（色だけに頼らない）。読み上げでは「天体 n」
+      const mark = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      mark.setAttribute("class", `mk s${(b % 8) + 1}`);
+      mark.setAttribute("aria-hidden", "true");
+      const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+      use.setAttribute("href", `#mk${b % 8}`);
+      mark.append(use);
+      const label = document.createElement("span");
+      label.setAttribute("aria-label", `天体 ${b + 1}`);
+      label.textContent = String(b + 1);
+      th.append(mark, label);
       tr.append(th);
       for (const f of FIELDS) {
         const td = document.createElement("td");
@@ -329,7 +338,6 @@ interface Panel {
   y: number;
   w: number;
   h: number;
-  title: string;
   project: (p: V3) => [number, number];
   axes: [string, V3][];
   /** ラグランジュ点の印を描くか（印は z′ = 0 の面にあるので、横から見る 2 面では軸と重なる） */
@@ -349,10 +357,10 @@ function panels(): Panel[] {
   // 回転座標系の軸には ′ をつける
   const [x, y, z] = ["x", "y", "z"].map((a) => (rotatingToggle.checked ? `${a}′` : a));
   return [
-    { x: 0, y: 0, w, h, title: "3D（ドラッグで回転）", project: rotate, axes: [[x, [1, 0, 0]], [y, [0, 1, 0]], [z, [0, 0, 1]]], lagrange: true },
-    { x: w, y: 0, w, h, title: x + y, project: ([u, v]) => [u, v], axes: [[x, [1, 0, 0]], [y, [0, 1, 0]]], lagrange: true },
-    { x: 0, y: h, w, h, title: x + z, project: ([u, , v]) => [u, v], axes: [[x, [1, 0, 0]], [z, [0, 0, 1]]], lagrange: false },
-    { x: w, y: h, w, h, title: y + z, project: ([, u, v]) => [u, v], axes: [[y, [0, 1, 0]], [z, [0, 0, 1]]], lagrange: false },
+    { x: 0, y: 0, w, h, project: rotate, axes: [[x, [1, 0, 0]], [y, [0, 1, 0]], [z, [0, 0, 1]]], lagrange: true },
+    { x: w, y: 0, w, h, project: ([u, v]) => [u, v], axes: [[x, [1, 0, 0]], [y, [0, 1, 0]]], lagrange: true },
+    { x: 0, y: h, w, h, project: ([u, , v]) => [u, v], axes: [[x, [1, 0, 0]], [z, [0, 0, 1]]], lagrange: false },
+    { x: w, y: h, w, h, project: ([, u, v]) => [u, v], axes: [[y, [0, 1, 0]], [z, [0, 0, 1]]], lagrange: false },
   ];
 }
 
@@ -454,7 +462,13 @@ function drawOrbits(): void {
         g.lineWidth = 2;
         g.globalAlpha = s === 1 ? 0.6 : 1;
         g.beginPath();
-        g.arc(sx, sy, 3 + 4 * Math.cbrt(masses[i] / Math.max(...masses)), 0, 2 * Math.PI);
+        // 形は天体ごとに変える（色だけに頼らない）。大きさは質量に応じる
+        const radius = 3.5 + 4.5 * Math.cbrt(masses[i] / Math.max(...masses));
+        const shape = markerPoints(i, radius);
+        if (shape) {
+          shape.forEach(([dx, dy], k) => (k ? g.lineTo(sx + dx, sy + dy) : g.moveTo(sx + dx, sy + dy)));
+          g.closePath();
+        } else g.arc(sx, sy, radius, 0, 2 * Math.PI);
         g.fill();
         g.stroke();
       }
@@ -469,9 +483,6 @@ function drawOrbits(): void {
       g.fillText(String(i + 1), sx + 8, sy - 6);
     }
     g.restore();
-    g.fillStyle = css("--text");
-    g.font = `20px ${css("--font-body")}`;
-    g.fillText(panel.title, panel.x + 10, panel.y + 24);
   }
   g.strokeStyle = css("--rule");
   g.lineWidth = 1;
@@ -481,12 +492,6 @@ function drawOrbits(): void {
   g.moveTo(0, orbits.height / 2);
   g.lineTo(orbits.width, orbits.height / 2);
   g.stroke();
-  g.fillStyle = css("--muted");
-  g.font = `16px ${css("--font-body")}`;
-  const origin = rotatingToggle.checked
-    ? `rotating frame: origin = center of mass of bodies ${pair[0] + 1} and ${pair[1] + 1}, x′ toward body ${pair[1] + 1}`
-    : "origin = center of mass";
-  g.fillText(`axis length = ${(half * 0.8).toPrecision(2)} (G = 1 units), ${origin}`, 10, orbits.height - 10);
 }
 
 /** 回転座標系での L1〜L5 の位置（主星と伴星のいまの間隔で拡大する）。静止座標系のときは描かない */
@@ -565,7 +570,7 @@ function frame(now: number): void {
 function setPlaying(value: boolean): void {
   playing = value;
   playButton.setAttribute("aria-pressed", String(value));
-  playButton.textContent = value ? "一時停止" : "再生";
+  playButton.setAttribute("aria-label", value ? "一時停止" : "再生");
   // 止めるときも、再生し直すときも、前の予約を取り消す（apply() のように止めてすぐ再生すると、古い連鎖が残るため）
   cancelAnimationFrame(frameRequest);
   frameRequest = 0;
@@ -607,6 +612,17 @@ function setupViewControls(): void {
     else return;
     e.preventDefault();
     drawOrbits();
+  });
+  // 全体のキー：Space＝再生、R＝やり直し、＋／−＝拡大縮小（入力欄やボタンにフォーカスがあるときは何もしない）
+  document.addEventListener("keydown", (e) => {
+    const target = e.target as HTMLElement;
+    if (e.metaKey || e.ctrlKey || e.altKey || /^(INPUT|SELECT|TEXTAREA|BUTTON|SUMMARY|A)$/.test(target.tagName)) return;
+    if (e.key === " " && !playButton.disabled) setPlaying(!playing);
+    else if (e.key === "r" && !applyButton.disabled) apply();
+    else if (e.key === "+" || e.key === "=") $<HTMLButtonElement>("#zoom-in").click();
+    else if (e.key === "-") $<HTMLButtonElement>("#zoom-out").click();
+    else return;
+    e.preventDefault();
   });
   $<HTMLButtonElement>("#zoom-in").addEventListener("click", () => {
     view.zoom *= 1.25;
