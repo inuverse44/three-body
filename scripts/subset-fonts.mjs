@@ -8,7 +8,8 @@ import subsetFont from "subset-font";
 
 const DIST = "dist";
 const ASSETS = join(DIST, "_astro");
-const html = readFileSync(join(DIST, "index.html"), "utf8");
+// 数式と CMU フォントを使うのはヘルプのページだけ（メイン画面はシステムのフォント）
+const html = readFileSync(join(DIST, "help", "index.html"), "utf8");
 
 const decode = (s) => s.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)));
 
